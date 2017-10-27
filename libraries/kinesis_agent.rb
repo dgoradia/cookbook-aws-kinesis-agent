@@ -6,7 +6,7 @@ class KinesisAgent < Chef::Resource
 
   action :install do
     include_recipe 'apt'
-    package %w(git wget)
+    package 'tar'
 
     sync_repo(revision)
 
@@ -33,10 +33,12 @@ class KinesisAgent < Chef::Resource
     end
 
     def sync_repo(revision)
-      git "#{Chef::Config[:file_cache_path]}/amazon-kinesis-agent" do
-        repository 'https://github.com/awslabs/amazon-kinesis-agent.git'
-        revision revision
-        action :sync
+      remote_file "#{Chef::Config[:file_cache_path]}/amazon-kinesis-agent-#{revision}.tar.gz" do
+        source "https://github.com/awslabs/amazon-kinesis-agent/archive/#{revision}.tar.gz"
+      end
+      execute 'extract aws-kinesis-agent' do
+        cwd "#{Chef::Config[:file_cache_path]}"
+        command "tar -xvzf ./amazon-kinesis-agent-#{revision}.tar.gz"
       end
     end
 
@@ -44,7 +46,7 @@ class KinesisAgent < Chef::Resource
       cmd = "./setup --#{action}"
       cmd.prepend("JAVA_HOME=#{java_home} ") if java_home
       execute 'install aws-kinesis-agent' do
-        cwd "#{Chef::Config[:file_cache_path]}/amazon-kinesis-agent"
+        cwd "#{Chef::Config[:file_cache_path]}/amazon-kinesis-agent-#{revision}/"
         command cmd
       end
     end
