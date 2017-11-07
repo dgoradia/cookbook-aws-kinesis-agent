@@ -15,6 +15,7 @@ class KinesisConfig < Chef::Resource
   property :cloudwatch_endpoint, String
   property :firehose_endpoint, String
   property :region, String
+  property :checkpoint_file, String
 
   action :install do
     converge_if_changed do
@@ -45,9 +46,10 @@ class KinesisConfig < Chef::Resource
 
     def config
       new_resource.region = aws_region
-      kinesis_endpoint = "kinesis.#{aws_region}.amazonaws.com" unless new_resource.kinesis_endpoint
-      cloudwatch_endpoint = "monitoring.#{aws_region}.amazonaws.com" unless new_resource.cloudwatch_endpoint
-      firehose_endpoint = "firehose.#{aws_region}.amazonaws.com" unless new_resource.firehose_endpoint
+      kinesis_endpoint = new_resource.kinesis_endpoint.nil? ? "kinesis.#{aws_region}.amazonaws.com" : new_resource.kinesis_endpoint
+      cloudwatch_endpoint = new_resource.cloudwatch_endpoint.nil? ? "monitoring.#{aws_region}.amazonaws.com" : new_resource.cloudwatch_endpoint
+      firehose_endpoint = new_resource.firehose_endpoint.nil? ? "firehose.#{aws_region}.amazonaws.com" : new_resource.firehose_endpoint
+      checkpoint_file = new_resource.checkpoint_file.nil? ? '/var/run/aws-kinesis-agent/checkpoints' : new_resource.checkpoint_file
 
       agent = Chef::JSONCompat.parse(::File.read('/etc/aws-kinesis/agent.json'))
       agent = {} if agent.nil?
@@ -56,6 +58,7 @@ class KinesisConfig < Chef::Resource
       agent['kinesis.endpoint'] = kinesis_endpoint
       agent['cloudwatch.endpoint'] = cloudwatch_endpoint
       agent['firehose.endpoint'] = firehose_endpoint
+      agent['checkpointFile'] = checkpoint_file
 
       # agent['flows'].select { |flow| delete(flow) if flow['filePattern'] == '/tmp/app.log*' }
       agent['flows'] = [] unless agent.key?('flows')

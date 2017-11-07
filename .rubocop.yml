@@ -16,3 +16,6 @@ NumericLiteralPrefix:
   Enabled: false
 AbcSize:
   Enabled: false
+CyclomaticComplexity: 
+  Enabled: false
+  
