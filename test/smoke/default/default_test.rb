@@ -23,6 +23,7 @@ end
   kinesis.endpoint
   cloudwatch.endpoint
   firehose.endpoint
+  checkpointFile
   flows
   /var/log/cloud-init-output.log
   /var/log/aws-kinesis-agent/aws-kinesis-agent.log
