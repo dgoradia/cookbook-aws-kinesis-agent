@@ -7,7 +7,7 @@ class KinesisFlow < Chef::Resource
   property :file_pattern, String, name_property: true
   property :stream_type, [String, Symbol], equal_to: [:kinesis, :firehose], default: :kinesis
   property :stream_name, String
-  property :data_processing_options, Hash
+  property :data_processing_options, Array
   # property :data, Hash, desired_state: false
 
   # load_current_value do
@@ -21,9 +21,8 @@ class KinesisFlow < Chef::Resource
     end
 
     data = Chef::JSONCompat.parse(::File.read('/etc/aws-kinesis/agent.json'))
-
-    if pattern_exist?(data['flows'], file_pattern)
-      needs_update?(data['flows'], file_pattern, stream_type, stream_name) ? delete_by_pattern!(data['flows'], file_pattern) : return
+    if pattern_exist?(data, file_pattern)
+      needs_update?(data['flows'], file_pattern, stream_type, stream_name, data_processing_options) ? delete_by_pattern!(data['flows'], file_pattern) : return
     end
 
     flow = { filePattern: file_pattern }
@@ -33,7 +32,15 @@ class KinesisFlow < Chef::Resource
     Chef::Log.error(Chef::Config[:file_cache_path])
     if data_processing_options && data_processing_options.is_a?(Hash)
       fatal!("Property 'data_processing_options' requires key 'optionName'.") unless data_processing_options.key?(:optionName)
+      flow['dataProcessingOptions'] = [data_processing_options]
+    elsif data_processing_options && data_processing_options.is_a?(Array)
+      # ensure all data_processing_options hashes has optionName key
+      data_processing_options.each do |data_processing_option|
+        fatal!("Each data_processing_options Properties requires key 'optionName'.") unless data_processing_option.key?(:optionName)
+      end
       flow['dataProcessingOptions'] = data_processing_options
+    else
+      fatal!("Property 'data_processing_options' must be a Hash or an Array type")
     end
 
     data['flows'].push flow
@@ -63,15 +70,20 @@ class KinesisFlow < Chef::Resource
       end
     end
 
-    def pattern_exist?(flows, pattern)
-      return false if flows.empty?
-      flows.any? { |flow| flow['filePattern'] == pattern }
+    def pattern_exist?(data, pattern)
+      unless data.key?('flows')
+        data['flows']=[]
+        return false
+      end
+      return false if data['flows'].empty?
+      data['flows'].any? { |flow| flow['filePattern'] == pattern }
     end
 
-    def needs_update?(flows, pattern, type, name)
+    def needs_update?(flows, pattern, type, name, options)
       flow = flows.select { |f| f['filePattern'] == pattern }[0]
       flow.key?(parse_stream_type(type))
       flow[parse_stream_type(type)] != name
+      parse_stream_options(flow['dataProcessingOptions'], options)
     end
 
     def delete_by_pattern!(flows, pattern)
@@ -80,6 +92,22 @@ class KinesisFlow < Chef::Resource
 
     def parse_stream_type(stream_type)
       stream_type == :kinesis ? 'kinesisStream' : 'deliveryStream'
+    end
+
+    def parse_stream_options(stream_options, options)
+      arraycheck = true
+      unless stream_options.length == options.length
+        return arraycheck
+      end
+      for i in (0..stream_options.length - 1).to_a do
+        if stream_options[i] == options[i]
+          arraycheck = false
+        else
+          arraycheck = true
+          break
+        end
+      end
+      return arraycheck
     end
 
     def fatal!(msg)
